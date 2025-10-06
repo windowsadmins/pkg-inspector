@@ -1,0 +1,54 @@
+# Build artifacts
+bin/
+obj/
+build/
+*.exe
+*.dll
+*.pdb
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userprefs
+*.DotSettings.user
+
+# Visual Studio Code
+.vscode/
+
+# Rider
+.idea/
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+# Test results
+TestResults/
+
+# Package files
+*.pkg
+
+# Build info
+build-info.yaml
+
+# Windows
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+test-*/
+*-staging-*
