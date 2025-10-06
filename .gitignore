@@ -1,3 +1,6 @@
+# Environment variables (contains private information)
+.env
+
 # Build artifacts
 bin/
 obj/
