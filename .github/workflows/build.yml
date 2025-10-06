@@ -1,0 +1,71 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+    
+    - name: Restore dependencies
+      run: dotnet restore pkg-inspector.sln
+    
+    - name: Build solution
+      run: dotnet build pkg-inspector.sln --configuration Release --no-restore
+    
+    - name: Build x64 release
+      run: |
+        dotnet publish pkginspector.csproj `
+          --configuration Release `
+          --runtime win-x64 `
+          --self-contained true `
+          --output .\build\win-x64 `
+          /p:PublishSingleFile=true `
+          /p:IncludeNativeLibrariesForSelfExtract=true
+    
+    - name: Build ARM64 release
+      run: |
+        dotnet publish pkginspector.csproj `
+          --configuration Release `
+          --runtime win-arm64 `
+          --self-contained true `
+          --output .\build\win-arm64 `
+          /p:PublishSingleFile=true `
+          /p:IncludeNativeLibrariesForSelfExtract=true
+    
+    - name: Upload x64 artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: pkginspector-win-x64
+        path: .\build\win-x64\pkginspector.exe
+    
+    - name: Upload ARM64 artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: pkginspector-win-arm64
+        path: .\build\win-arm64\pkginspector.exe
+    
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          .\build\win-x64\pkginspector.exe
+          .\build\win-arm64\pkginspector.exe
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
