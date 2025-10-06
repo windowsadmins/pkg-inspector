@@ -1,0 +1,2 @@
+# Placeholder package icon
+# In production, replace with actual .png file (64x64 or larger)
