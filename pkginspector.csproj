@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>pkginspector</AssemblyName>
+    <RootNamespace>PkgInspector</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <SupportedOSPlatformVersion>6.1</SupportedOSPlatformVersion>
+    <Version>2025.10.05.1100</Version>
+    <AssemblyTitle>Package Inspector</AssemblyTitle>
+    <Authors>Windows Admins</Authors>
+    <Company>Windows Admins</Company>
+    <Product>Package Inspector</Product>
+    <Description>Modern GUI and CLI tool for inspecting Windows package files</Description>
+    <Copyright>Copyright © $([System.DateTime]::Now.Year)</Copyright>
+    <!-- Enable console output for CLI mode -->
+    <DisableWinExeOutputInference>true</DisableWinExeOutputInference>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="13.7.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
+    <PackageReference Include="AvalonEdit" Version="6.3.0.90" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources\app-icon.png" />
+    <Resource Include="Resources\package-icon.png" />
+    <None Include="Resources\**\*" CopyToOutputDirectory="PreserveNewest" Exclude="Resources\app-icon.png;Resources\package-icon.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Exclude CLI directory from main project -->
+    <Compile Remove="cli\**" />
+    <EmbeddedResource Remove="cli\**" />
+    <None Remove="cli\**" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!-- Enable true single-file deployment with everything embedded -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Embed everything, don't extract to temp -->
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+
+</Project>
