@@ -6,7 +6,7 @@ namespace PkgInspector.Services;
 
 /// <summary>
 /// Service for inspecting .msi package files using DTF (direct msi.dll interop).
-/// Handles both cimipkg-built MSI (with CIMIAN_BUILD_INFO) and commercial MSI.
+/// Handles both cimipkg-built MSI (with CIMIAN_PKG_BUILD_INFO) and commercial MSI.
 /// </summary>
 public class MsiInspectorService
 {
@@ -49,7 +49,7 @@ public class MsiInspectorService
         var properties = ReadAllProperties(db);
 
         // Check for cimipkg-built MSI
-        var buildInfoYaml = properties.GetValueOrDefault("CIMIAN_BUILD_INFO");
+        var buildInfoYaml = properties.GetValueOrDefault("CIMIAN_PKG_BUILD_INFO");
         if (!string.IsNullOrEmpty(buildInfoYaml))
         {
             packageData.RawMetadata = buildInfoYaml;
