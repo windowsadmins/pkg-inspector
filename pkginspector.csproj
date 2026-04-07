@@ -10,7 +10,7 @@
     <AssemblyName>pkginspector</AssemblyName>
     <RootNamespace>PkgInspector</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>app.ico</ApplicationIcon>
+    <!-- <ApplicationIcon>app.ico</ApplicationIcon> -->
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <SupportedOSPlatformVersion>6.1</SupportedOSPlatformVersion>
     <Version>2025.10.05.1100</Version>
@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <PackageReference Include="YamlDotNet" Version="13.7.1" />
+    <PackageReference Include="WixToolset.Dtf.WindowsInstaller" Version="5.*" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
     <PackageReference Include="AvalonEdit" Version="6.3.0.90" />
