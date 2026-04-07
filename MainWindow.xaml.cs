@@ -28,6 +28,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
     
     private readonly PackageInspectorService _inspectorService;
+    private readonly MsiInspectorService _msiInspectorService;
     private PackageData? _currentPackage;
     private ScriptInfo? _selectedScript;
     private System.Windows.Threading.DispatcherTimer? _themeMonitor;
@@ -37,6 +38,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         InitializeComponent();
         _inspectorService = new PackageInspectorService();
+        _msiInspectorService = new MsiInspectorService();
         DataContext = this;
         
         // Set window icon from PNG resource (better alpha channel support than ICO)
@@ -253,7 +255,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = "Package Files (*.pkg;*.nupkg)|*.pkg;*.nupkg|All Files (*.*)|*.*",
+            Filter = "Package Files (*.pkg;*.nupkg;*.msi)|*.pkg;*.nupkg;*.msi|All Files (*.*)|*.*",
             Title = "Select a Package to Inspect"
         };
 
@@ -272,7 +274,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 var file = files[0];
                 if (file.EndsWith(".pkg", StringComparison.OrdinalIgnoreCase) ||
-                    file.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
+                    file.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase) ||
+                    file.EndsWith(".msi", StringComparison.OrdinalIgnoreCase))
                 {
                     _ = LoadPackage(file);
                 }
@@ -333,7 +336,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
 
-            _currentPackage = await _inspectorService.InspectPackageAsync(filePath);
+            _currentPackage = Path.GetExtension(filePath).Equals(".msi", StringComparison.OrdinalIgnoreCase)
+                ? await _msiInspectorService.InspectPackageAsync(filePath)
+                : await _inspectorService.InspectPackageAsync(filePath);
             
             // Select first script if available
             if (_currentPackage.Scripts.Count > 0)
