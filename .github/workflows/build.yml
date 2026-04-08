@@ -1,71 +1,90 @@
-name: Build and Release
+name: CI
 
 on:
   push:
-    branches: [ main, master ]
-    tags:
-      - 'v*'
+    branches: [main]
   pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
+    branches: [main]
+
+env:
+  DOTNET_VERSION: '10.0.x'
 
 jobs:
   build:
     runs-on: windows-latest
-    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '9.0.x'
-    
-    - name: Restore dependencies
-      run: dotnet restore pkg-inspector.sln
-    
-    - name: Build solution
-      run: dotnet build pkg-inspector.sln --configuration Release --no-restore
-    
-    - name: Build x64 release
-      run: |
-        dotnet publish pkginspector.csproj `
-          --configuration Release `
-          --runtime win-x64 `
-          --self-contained true `
-          --output .\build\win-x64 `
-          /p:PublishSingleFile=true `
-          /p:IncludeNativeLibrariesForSelfExtract=true
-    
-    - name: Build ARM64 release
-      run: |
-        dotnet publish pkginspector.csproj `
-          --configuration Release `
-          --runtime win-arm64 `
-          --self-contained true `
-          --output .\build\win-arm64 `
-          /p:PublishSingleFile=true `
-          /p:IncludeNativeLibrariesForSelfExtract=true
-    
-    - name: Upload x64 artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: pkginspector-win-x64
-        path: .\build\win-x64\pkginspector.exe
-    
-    - name: Upload ARM64 artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: pkginspector-win-arm64
-        path: .\build\win-arm64\pkginspector.exe
-    
-    - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          .\build\win-x64\pkginspector.exe
-          .\build\win-arm64\pkginspector.exe
-        generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Determine version
+        id: version
+        shell: pwsh
+        run: |
+          $version = Get-Date -Format "yyyy.MM.dd.HHmm"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Build binaries
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+
+          foreach ($rid in @("win-x64", "win-arm64")) {
+            Write-Host "Publishing for $rid..."
+            dotnet publish pkginspector.csproj `
+              -c Release -r $rid --self-contained `
+              -o "publish/$rid" `
+              -p:PublishSingleFile=true `
+              -p:IncludeNativeLibrariesForSelfExtract=true `
+              -p:IncludeAllContentForSelfExtract=true `
+              -p:EnableCompressionInSingleFile=true `
+              -p:Version=$version `
+              -p:AssemblyVersion=$version `
+              -p:FileVersion=$version `
+              -p:InformationalVersion=$version
+
+            $arch = if ($rid -eq "win-x64") { "x64" } else { "arm64" }
+            Compress-Archive -Path "publish/$rid/pkginspector.exe" -DestinationPath "release/pkginspector-$arch.zip" -Force
+            Write-Host "Created: release/pkginspector-$arch.zip"
+          }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: release/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.build.outputs.version }}
+          name: pkg-inspector ${{ needs.build.outputs.version }}
+          generate_release_notes: true
+          files: release/*
+
+      - name: Delete tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/v${{ needs.build.outputs.version }}" || true
