@@ -192,7 +192,9 @@ public class MsiInspectorService
     {
         try
         {
-            var cert = System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadSignedFile(msiPath);
+#pragma warning disable SYSLIB0057
+            var cert = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromSignedFile(msiPath);
+#pragma warning restore SYSLIB0057
             packageData.IsSigned = true;
             packageData.SignedBy = cert.Subject;
         }
