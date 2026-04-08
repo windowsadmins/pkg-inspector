@@ -82,6 +82,13 @@ jobs:
           name: pkg-inspector ${{ needs.build.outputs.version }}
           generate_release_notes: true
           files: release/*
+          body: |
+            Binaries are provided **unsigned**. For enterprise deployment, sign them with your organization's code signing certificate before distribution:
+
+            ```powershell
+            # Sign binary
+            signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /n "Your Certificate Name" pkginspector.exe
+            ```
 
       - name: Delete tag
         env:
