@@ -192,8 +192,7 @@ public class MsiInspectorService
     {
         try
         {
-            // Use Authenticode signature check via PowerShell interop
-            var cert = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromSignedFile(msiPath);
+            var cert = System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadSignedFile(msiPath);
             packageData.IsSigned = true;
             packageData.SignedBy = cert.Subject;
         }
