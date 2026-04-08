@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
@@ -26,9 +26,9 @@
 
   <ItemGroup>
     <PackageReference Include="YamlDotNet" Version="13.7.1" />
-    <PackageReference Include="WixToolset.Dtf.WindowsInstaller" Version="5.*" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
+    <PackageReference Include="WixToolset.Dtf.WindowsInstaller" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.0" />
     <PackageReference Include="AvalonEdit" Version="6.3.0.90" />
   </ItemGroup>
 
@@ -54,7 +54,6 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <!-- Embed everything, don't extract to temp -->
     <SelfContained>true</SelfContained>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
 </Project>
