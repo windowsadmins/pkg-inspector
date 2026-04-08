@@ -39,7 +39,7 @@ jobs:
           foreach ($rid in @("win-x64", "win-arm64")) {
             Write-Host "Publishing for $rid..."
             dotnet publish pkginspector.csproj `
-              -c Release -r $rid --self-contained `
+              -c Release -r $rid --self-contained true `
               -o "publish/$rid" `
               -p:PublishSingleFile=true `
               -p:IncludeNativeLibrariesForSelfExtract=true `
