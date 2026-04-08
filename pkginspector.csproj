@@ -52,8 +52,6 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-    <!-- Embed everything, don't extract to temp -->
-    <SelfContained>true</SelfContained>
   </PropertyGroup>
 
 </Project>
