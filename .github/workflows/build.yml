@@ -88,7 +88,8 @@ jobs:
 
             ```powershell
             # Sign binary
-            signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /n "Your Certificate Name" pkginspector.exe
+            Expand-Archive -Path pkginspector-x64.zip -DestinationPath .
+            signtool sign /fd SHA256 /tr https://timestamp.digicert.com /td SHA256 /n "Your Certificate Name" pkginspector.exe
             ```
 
       - name: Delete tag
