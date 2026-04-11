@@ -71,12 +71,20 @@ public class MsiInspectorService
             // fields match parity — identifier, install_location, nested
             // product block, etc. Fall back to reading MSI properties if the
             // YAML is malformed for any reason.
+            //
+            // PackageInspectorService catches the broad Exception here so that
+            // type conversion errors, invalid casts, and anything else
+            // YamlDotNet might throw during deserialization degrade
+            // gracefully into the property-table fallback instead of
+            // bubbling out and failing the whole inspection. Match that
+            // behavior so cimipkg MSIs with unusual/malformed build-info.yaml
+            // still render something useful.
             BuildInfo? metadata = null;
             try
             {
                 metadata = _yamlDeserializer.Deserialize<BuildInfo>(buildInfoYaml);
             }
-            catch (YamlDotNet.Core.YamlException)
+            catch (Exception)
             {
                 metadata = null;
             }
@@ -100,13 +108,20 @@ public class MsiInspectorService
                 Description = properties.GetValueOrDefault("ARPCOMMENTS") ?? "Cimian MSI package",
             };
 
-            // Backfill anything the YAML left blank from the MSI Property table.
+            // Backfill any BuildInfo field the YAML left blank from the MSI
+            // Property table so the UI always has something to display. This
+            // has to cover Description too — the Description += "..." block
+            // below appends ProductCode/UpgradeCode/Identifier unconditionally,
+            // and starting from an empty string would leave the UI with a
+            // leading blank line.
             if (string.IsNullOrEmpty(packageData.Metadata.Name))
                 packageData.Metadata.Name = properties.GetValueOrDefault("ProductName") ?? Path.GetFileNameWithoutExtension(packageData.FileName);
             if (string.IsNullOrEmpty(packageData.Metadata.Version))
                 packageData.Metadata.Version = properties.GetValueOrDefault("CIMIAN_FULL_VERSION") ?? properties.GetValueOrDefault("ProductVersion") ?? "Unknown";
             if (string.IsNullOrEmpty(packageData.Metadata.Author))
                 packageData.Metadata.Author = properties.GetValueOrDefault("Manufacturer") ?? "Unknown";
+            if (string.IsNullOrEmpty(packageData.Metadata.Description))
+                packageData.Metadata.Description = properties.GetValueOrDefault("ARPCOMMENTS") ?? "Cimian MSI package";
         }
         else
         {

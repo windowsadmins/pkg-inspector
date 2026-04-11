@@ -25,13 +25,12 @@ public static class CimipkgVbsDecoder
 {
     // Matches the base64 chunk assignment lines emitted by cimipkg's
     // BuildScriptActionVbs. The regex tolerates any amount of interior
-    // whitespace and accepts all standard base64 alphabet characters.
+    // whitespace and accepts all standard base64 alphabet characters, so a
+    // future cimipkg tweak (e.g. dropping the spaces around `=` or `&`)
+    // does not break decoding.
     private static readonly Regex ChunkLine = new(
         "b64\\s*=\\s*b64\\s*&\\s*\"([A-Za-z0-9+/=]+)\"",
         RegexOptions.Compiled);
-
-    // Cheap prefilter so we don't even run the regex on unrelated VBS.
-    private const string ChunkMarker = "b64 = b64";
 
     /// <summary>
     /// Returns the decoded PowerShell source for a cimipkg custom action
@@ -41,7 +40,15 @@ public static class CimipkgVbsDecoder
     public static string? TryDecode(string? vbs)
     {
         if (string.IsNullOrEmpty(vbs)) return null;
-        if (!vbs.Contains(ChunkMarker, StringComparison.Ordinal)) return null;
+
+        // Use the same whitespace-tolerant regex for the fast path so a
+        // future cimipkg change to spacing (e.g. `b64=b64&"..."`) does not
+        // get rejected by a literal-string prefilter even though the match
+        // loop below would have accepted it. Running IsMatch once is cheap
+        // relative to the full base64 decode + BOM check below, and it
+        // keeps commercial-MSI inspection fast because those VBS bodies
+        // never contain the chunk pattern at all.
+        if (!ChunkLine.IsMatch(vbs)) return null;
 
         var builder = new StringBuilder(vbs.Length);
         foreach (Match match in ChunkLine.Matches(vbs))
