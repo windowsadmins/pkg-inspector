@@ -115,7 +115,7 @@ Navigate through tabs:
 - **Package Info** - Overview and installation details
 - **All Files** - Tree view of payload files
 - **All Scripts** - Pre/post-install scripts (including PowerShell decoded from MSI custom actions)
-- **Metadata** - Raw YAML metadata (from `build-info.yaml` or the MSI `CIMIAN_PKG_BUILD_INFO` summary entry)
+- **Metadata** - Raw YAML metadata (from `build-info.yaml` in `.pkg`/`.nupkg` archives, or from the `CIMIAN_PKG_BUILD_INFO` entry in the MSI `Property` table)
 
 ### CLI Mode
 
@@ -125,25 +125,26 @@ The same executable provides full command-line functionality:
 # Show help
 pkginspector --help
 
-# Show MSI signature information
-pkginspector -g MyPackage.msi
+# Show signature information (reads build-info.yaml inside a .pkg/.nupkg ZIP;
+# MSI Authenticode signature extraction is not yet implemented — see below)
+pkginspector -g MyPackage.pkg
 
 # Open package with specific tab
 pkginspector -s MyPackage.msi           # Scripts tab
-pkginspector -f "path/to/file" MyPackage.msi  # Navigate to file
+pkginspector -f "path/to/file" MyPackage.msi  # Files tab (navigation to a specific file is TODO)
 
 # Quiet mode for scripting
-pkginspector -g -q MyPackage.msi
+pkginspector -g -q MyPackage.pkg
 ```
 
 ### Command-Line Options
 
-- `-f, --reveal-file <path>` - Open package and navigate to specified file
-- `-s, --reveal-scripts` - Open package and show Scripts tab
-- `-g, --show-signature` - Show package signature information (CLI output)
-- `-p, --show-component-packages` - List component packages (CLI output)
-- `-q, --quiet` - Minimal output for scripting
-- `-h, --help` - Show help message
+- `-f, --reveal-file <path>` - Open package in GUI and switch to the Files tab. *(Navigation to the specified file is not yet implemented — see the TODO in `MainWindow.xaml.cs`.)*
+- `-s, --reveal-scripts` - Open package in GUI and switch to the Scripts tab.
+- `-g, --show-signature` - Show package signature information. Currently reads the signature metadata from `build-info.yaml` inside a ZIP-based archive, so today it works with `.pkg` and `.nupkg` only. **MSI Authenticode signature extraction is a planned enhancement.**
+- `-p, --show-component-packages` - List component packages (CLI output).
+- `-q, --quiet` - Minimal output for scripting.
+- `-h, --help` - Show help message.
 
 ### Mode Detection
 
@@ -162,8 +163,9 @@ Both commercial MSIs and cimipkg-built MSIs are supported.
 
 For MSIs built by cimipkg, the inspector automatically:
 
-- Reads the embedded `CIMIAN_PKG_BUILD_INFO` summary information entry
-  and re-hydrates the original `build-info.yaml` metadata.
+- Reads the `CIMIAN_PKG_BUILD_INFO` entry from the MSI `Property` table
+  (via `SELECT Property, Value FROM Property`) and re-hydrates the
+  original `build-info.yaml` metadata.
 - Detects preinstall/postinstall custom actions whose VBScript source
   contains base64-chunked PowerShell, and decodes them back to their
   original PowerShell form for display in the Script Inspector.
@@ -203,7 +205,9 @@ package.pkg (ZIP file)
 .\build.ps1 -Architecture x64
 .\build.ps1 -Architecture arm64
 
-# Skip legacy .pkg packaging (on by default when cimipkg isn't installed)
+# Skip legacy .pkg packaging. The script attempts .pkg creation by default;
+# if cimipkg isn't installed on the build machine, it no-ops that step with a
+# warning. Use -SkipPkg to skip the attempt entirely.
 .\build.ps1 -SkipPkg
 ```
 
@@ -284,10 +288,16 @@ protected override void OnStartup(StartupEventArgs e)
 
 ## Scripting Examples
 
+> **Note:** `pkginspector -g` currently reads signature metadata from
+> `build-info.yaml` inside a ZIP-based package (`.pkg` / `.nupkg`), so the
+> examples below use `.pkg`. MSI Authenticode signature extraction via the
+> CLI is a planned enhancement — for now, MSI signatures are visible in
+> the GUI only.
+
 ### Check Package Signature
 
 ```powershell
-$result = & pkginspector -g -q MyPackage.msi
+$result = & pkginspector -g -q MyPackage.pkg
 if ($result -like "Signed|*") {
     Write-Host "Package is signed"
     $parts = $result -split '\|'
@@ -298,10 +308,10 @@ if ($result -like "Signed|*") {
 }
 ```
 
-### Batch Inspect MSIs in a Directory
+### Batch Inspect Archive Packages
 
 ```powershell
-Get-ChildItem *.msi | ForEach-Object {
+Get-ChildItem *.pkg | ForEach-Object {
     Write-Host "`nInspecting: $($_.Name)"
     & pkginspector -g $_.FullName
 }
@@ -331,7 +341,7 @@ pkg-inspector/
 │   ├── CimipkgVbsDecoder.cs         # Decode PS embedded in cimipkg MSI custom actions
 │   └── PackageInspectorService.cs   # .nupkg and legacy .pkg inspection (ZIP + YAML)
 ├── Converters/
-│   └── BoolToVisibilityConverter.cs # BoolToVisibility, InverseBoolToVisibility, SignatureBrush
+│   └── BoolToVisibilityConverter.cs # BoolToVisibilityConverter, InverseBoolToVisibilityConverter, SignatureBrushConverter
 ├── Resources/                       # Application resources
 ├── build.ps1                        # Build automation script
 ├── pkginspector.csproj              # Project file
