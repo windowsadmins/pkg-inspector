@@ -7,7 +7,6 @@ param(
     [string]$TimeStampServer = "http://timestamp.digicert.com",
     [switch]$ListCerts,
     [string]$FindCertSubject,
-    [switch]$SkipMsi,
     [switch]$SkipPkg,
     [string]$Version = "",
     [ValidateSet("x64", "arm64", "both", "auto")]
