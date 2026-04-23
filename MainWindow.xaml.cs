@@ -154,6 +154,35 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public bool HasDependencies => _currentPackage?.Metadata?.Dependencies?.Count > 0;
 
+    // MSI-specific identity. Empty when the loaded package is a .nupkg; the
+    // matching rows collapse in the XAML via the HasXxx flags.
+    public string ProductCode => _currentPackage?.ProductCode ?? string.Empty;
+    public bool HasProductCode => !string.IsNullOrEmpty(_currentPackage?.ProductCode);
+
+    public string UpgradeCode => _currentPackage?.UpgradeCode ?? string.Empty;
+    public bool HasUpgradeCode => !string.IsNullOrEmpty(_currentPackage?.UpgradeCode);
+
+    public string Identifier => _currentPackage?.Identifier ?? string.Empty;
+    public bool HasIdentifier => !string.IsNullOrEmpty(_currentPackage?.Identifier);
+
+    public string Architecture => _currentPackage?.Architecture ?? string.Empty;
+    public bool HasArchitecture => !string.IsNullOrEmpty(_currentPackage?.Architecture);
+
+    public string FullVersion => _currentPackage?.FullVersion ?? string.Empty;
+    // Only show FullVersion when it differs from the displayed Version
+    // (cimipkg stores the original date-based version separately from the MSI
+    // 3-part form, but for cimipkg MSIs the embedded YAML's product.version
+    // usually already carries the long form — no need to show it twice).
+    public bool HasFullVersion =>
+        !string.IsNullOrEmpty(_currentPackage?.FullVersion) &&
+        !string.Equals(_currentPackage.FullVersion, _currentPackage.Metadata?.Version, StringComparison.Ordinal);
+
+    public string Category => _currentPackage?.Metadata?.Category ?? string.Empty;
+    public bool HasCategory => !string.IsNullOrEmpty(_currentPackage?.Metadata?.Category);
+
+    public bool HasMsiIdentity =>
+        HasProductCode || HasUpgradeCode || HasIdentifier || HasArchitecture || HasFullVersion;
+
     public List<FileTreeNode> FileTree => _currentPackage?.FileTree ?? new();
 
     public List<ScriptInfo> Scripts => _currentPackage?.Scripts ?? new();
@@ -202,6 +231,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnPropertyChanged(nameof(IsSigned));
         OnPropertyChanged(nameof(SignatureStatus));
         OnPropertyChanged(nameof(SignedBy));
+        OnPropertyChanged(nameof(ProductCode));
+        OnPropertyChanged(nameof(HasProductCode));
+        OnPropertyChanged(nameof(UpgradeCode));
+        OnPropertyChanged(nameof(HasUpgradeCode));
+        OnPropertyChanged(nameof(Identifier));
+        OnPropertyChanged(nameof(HasIdentifier));
+        OnPropertyChanged(nameof(Architecture));
+        OnPropertyChanged(nameof(HasArchitecture));
+        OnPropertyChanged(nameof(FullVersion));
+        OnPropertyChanged(nameof(HasFullVersion));
+        OnPropertyChanged(nameof(Category));
+        OnPropertyChanged(nameof(HasCategory));
+        OnPropertyChanged(nameof(HasMsiIdentity));
     }
 
     private void ApplyTheme(bool isDark)
@@ -256,7 +298,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = "Package Files (*.pkg;*.nupkg;*.msi)|*.pkg;*.nupkg;*.msi|All Files (*.*)|*.*",
+            Filter = "Package Files (*.msi;*.nupkg)|*.msi;*.nupkg|All Files (*.*)|*.*",
             Title = "Select a Package to Inspect"
         };
 
@@ -274,9 +316,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (files.Length > 0)
             {
                 var file = files[0];
-                if (file.EndsWith(".pkg", StringComparison.OrdinalIgnoreCase) ||
-                    file.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase) ||
-                    file.EndsWith(".msi", StringComparison.OrdinalIgnoreCase))
+                if (file.EndsWith(".msi", StringComparison.OrdinalIgnoreCase) ||
+                    file.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
                 {
                     _ = LoadPackage(file);
                 }
@@ -388,6 +429,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnPropertyChanged(nameof(SignedBy));
         OnPropertyChanged(nameof(SignatureStatus));
         OnPropertyChanged(nameof(SignatureDetails));
+        OnPropertyChanged(nameof(ProductCode));
+        OnPropertyChanged(nameof(HasProductCode));
+        OnPropertyChanged(nameof(UpgradeCode));
+        OnPropertyChanged(nameof(HasUpgradeCode));
+        OnPropertyChanged(nameof(Identifier));
+        OnPropertyChanged(nameof(HasIdentifier));
+        OnPropertyChanged(nameof(Architecture));
+        OnPropertyChanged(nameof(HasArchitecture));
+        OnPropertyChanged(nameof(FullVersion));
+        OnPropertyChanged(nameof(HasFullVersion));
+        OnPropertyChanged(nameof(Category));
+        OnPropertyChanged(nameof(HasCategory));
+        OnPropertyChanged(nameof(HasMsiIdentity));
 
         // Expand all folders in the file tree after UI updates
         // Force tree expansion with multiple attempts

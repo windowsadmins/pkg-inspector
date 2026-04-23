@@ -203,8 +203,69 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- MSI Identity (cimipkg-built MSIs and third-party MSIs) -->
+                            <Border Background="{DynamicResource SurfaceBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Padding="12"
+                                    Margin="0,0,0,8"
+                                    Visibility="{Binding HasMsiIdentity, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <StackPanel>
+                                    <TextBlock Text="MSI Identity"
+                                               Style="{StaticResource SubHeaderText}"
+                                               Margin="0,0,0,8"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Identifier:" Style="{StaticResource LabelText}" Margin="0,0,0,4"
+                                                   Visibility="{Binding HasIdentifier, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Identifier}" Style="{StaticResource ValueText}" Margin="0,0,0,4"
+                                                   Visibility="{Binding HasIdentifier, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Full Version:" Style="{StaticResource LabelText}" Margin="0,0,0,4"
+                                                   Visibility="{Binding HasFullVersion, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding FullVersion}" Style="{StaticResource ValueText}" Margin="0,0,0,4"
+                                                   Visibility="{Binding HasFullVersion, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Architecture:" Style="{StaticResource LabelText}" Margin="0,0,0,4"
+                                                   Visibility="{Binding HasArchitecture, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Architecture}" Style="{StaticResource ValueText}" Margin="0,0,0,4"
+                                                   Visibility="{Binding HasArchitecture, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Product Code:" Style="{StaticResource LabelText}" Margin="0,0,0,4"
+                                                   Visibility="{Binding HasProductCode, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ProductCode}" Style="{StaticResource ValueText}" Margin="0,0,0,4"
+                                                   FontFamily="Consolas" FontSize="11"
+                                                   Visibility="{Binding HasProductCode, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Upgrade Code:" Style="{StaticResource LabelText}" Margin="0,0,0,4"
+                                                   Visibility="{Binding HasUpgradeCode, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding UpgradeCode}" Style="{StaticResource ValueText}" Margin="0,0,0,4"
+                                                   FontFamily="Consolas" FontSize="11"
+                                                   Visibility="{Binding HasUpgradeCode, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Category:" Style="{StaticResource LabelText}"
+                                                   Visibility="{Binding HasCategory, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Category}" Style="{StaticResource ValueText}"
+                                                   Visibility="{Binding HasCategory, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
                             <!-- Dependencies -->
-                            <Border Background="{DynamicResource SurfaceBrush}" 
+                            <Border Background="{DynamicResource SurfaceBrush}"
                                     BorderBrush="{DynamicResource BorderBrush}"
                                     BorderThickness="1"
                                     CornerRadius="4"
@@ -248,6 +309,19 @@
                                   ItemsSource="{Binding FileTree}"
                                   SelectedItemChanged="FilesTreeView_SelectedItemChanged"
                                   MouseRightButtonDown="FilesTreeView_RightClick">
+                            <TreeView.ItemContainerStyle>
+                                <!-- Auto-expand every node as it materialises
+                                     (covers late tab activation + virtualised
+                                     container creation) and bind Foreground to
+                                     the theme brush so dark mode text stays
+                                     readable. A bare Style TargetType wipes the
+                                     default TreeViewItem foreground, so this
+                                     setter is load-bearing. -->
+                                <Style TargetType="TreeViewItem">
+                                    <Setter Property="IsExpanded" Value="True"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                                </Style>
+                            </TreeView.ItemContainerStyle>
                             <TreeView.ContextMenu>
                                 <ContextMenu x:Name="FileContextMenu">
                                     <MenuItem Header="Export Item..." Click="ExportFileItem_Click"/>
