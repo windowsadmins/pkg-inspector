@@ -312,14 +312,13 @@
                             <TreeView.ItemContainerStyle>
                                 <!-- Auto-expand every node as it materialises
                                      (covers late tab activation + virtualised
-                                     container creation) and bind Foreground to
-                                     the theme brush so dark mode text stays
-                                     readable. A bare Style TargetType wipes the
-                                     default TreeViewItem foreground, so this
-                                     setter is load-bearing. -->
-                                <Style TargetType="TreeViewItem">
+                                     container creation). BasedOn preserves
+                                     App.xaml's implicit TreeViewItem style —
+                                     foreground / padding / hover / selection
+                                     triggers would all be lost without it. -->
+                                <Style TargetType="TreeViewItem"
+                                       BasedOn="{StaticResource {x:Type TreeViewItem}}">
                                     <Setter Property="IsExpanded" Value="True"/>
-                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                                 </Style>
                             </TreeView.ItemContainerStyle>
                             <TreeView.ContextMenu>

@@ -207,8 +207,15 @@ public partial class WelcomeControl : System.Windows.Controls.UserControl, INoti
             if (files.Length > 0)
             {
                 var file = files[0];
+                // Accept .pkg silently for back-compat. The format is being
+                // retired and no longer advertised in the file dialog filter
+                // or welcome-screen text, but PackageInspectorService still
+                // handles it and other entry points (command-line args,
+                // Recent Packages) still route through LoadPackage, so
+                // rejecting drops here would be an isolated inconsistency.
                 if (file.EndsWith(".msi", StringComparison.OrdinalIgnoreCase) ||
-                    file.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
+                    file.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase) ||
+                    file.EndsWith(".pkg", StringComparison.OrdinalIgnoreCase))
                 {
                     PackageSelected?.Invoke(this, file);
                 }

@@ -316,8 +316,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (files.Length > 0)
             {
                 var file = files[0];
+                // .pkg is deprecated and no longer advertised in the file
+                // filter / welcome-screen text, but LoadPackage still handles
+                // it via PackageInspectorService and command-line + Recent
+                // Packages entry points still open .pkg files. Accept .pkg
+                // on drag/drop too so the three surfaces don't diverge —
+                // otherwise dragging a .pkg silently no-ops while
+                // double-clicking one from Recent still works.
                 if (file.EndsWith(".msi", StringComparison.OrdinalIgnoreCase) ||
-                    file.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
+                    file.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase) ||
+                    file.EndsWith(".pkg", StringComparison.OrdinalIgnoreCase))
                 {
                     _ = LoadPackage(file);
                 }
