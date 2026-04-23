@@ -147,7 +147,7 @@ public partial class WelcomeControl : System.Windows.Controls.UserControl, INoti
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = "Package Files (*.pkg;*.nupkg)|*.pkg;*.nupkg|All Files (*.*)|*.*",
+            Filter = "Package Files (*.msi;*.nupkg)|*.msi;*.nupkg|All Files (*.*)|*.*",
             Title = "Select a Package to Inspect"
         };
 
@@ -207,7 +207,7 @@ public partial class WelcomeControl : System.Windows.Controls.UserControl, INoti
             if (files.Length > 0)
             {
                 var file = files[0];
-                if (file.EndsWith(".pkg", StringComparison.OrdinalIgnoreCase) ||
+                if (file.EndsWith(".msi", StringComparison.OrdinalIgnoreCase) ||
                     file.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
                 {
                     PackageSelected?.Invoke(this, file);

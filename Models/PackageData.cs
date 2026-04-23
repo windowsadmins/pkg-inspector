@@ -1,19 +1,52 @@
 namespace PkgInspector.Models;
 
 /// <summary>
+/// Package container format. Determines which Services implementation was used
+/// and which fields will be populated on <see cref="PackageData"/>.
+/// </summary>
+public enum PackageFormat
+{
+    Unknown,
+    Pkg,    // cimipkg ZIP-style (payload/ + scripts/ + build-info.yaml)
+    Nupkg,  // NuGet / Chocolatey
+    Msi,    // Windows Installer — cimipkg-built or any third-party MSI
+}
+
+/// <summary>
 /// Container for all inspected package data
 /// </summary>
 public class PackageData
 {
     public string FilePath { get; set; } = string.Empty;
     public string FileName { get; set; } = string.Empty;
+    public PackageFormat Format { get; set; } = PackageFormat.Unknown;
+
     public BuildInfo? Metadata { get; set; }
     public string RawMetadata { get; set; } = string.Empty;
+
     public List<FileInfo> Files { get; set; } = new();
     public List<ScriptInfo> Scripts { get; set; } = new();
     public List<FileTreeNode> FileTree { get; set; } = new();
+
     public bool IsSigned { get; set; }
     public string SignedBy { get; set; } = string.Empty;
+
+    // --- MSI-specific identity fields ----------------------------------------
+    // Populated only for Format == Msi. UI hides rows with empty values so the
+    // .pkg / .nupkg views stay uncluttered.
+
+    public string ProductCode { get; set; } = string.Empty;
+    public string UpgradeCode { get; set; } = string.Empty;
+    public string Identifier { get; set; } = string.Empty;
+    public string Architecture { get; set; } = string.Empty;
+    public string FullVersion { get; set; } = string.Empty;
+
+    /// <summary>
+    /// True when this is a cimipkg-produced MSI (i.e. Property table contains
+    /// CIMIAN_PKG_BUILD_INFO). Lets the UI offer richer views for known-shape
+    /// MSIs while still working on any third-party MSI.
+    /// </summary>
+    public bool IsCimipkgMsi { get; set; }
 }
 
 /// <summary>
