@@ -1,15 +1,27 @@
 using System.IO;
 using PkgInspector.Models;
 using WixToolset.Dtf.WindowsInstaller;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace PkgInspector.Services;
 
 /// <summary>
 /// Service for inspecting .msi package files using DTF (direct msi.dll interop).
-/// Handles both cimipkg-built MSI (with CIMIAN_PKG_BUILD_INFO) and commercial MSI.
+/// Handles both cimipkg-built MSI (with CIMIAN_PKG_BUILD_INFO) and any third-party MSI.
 /// </summary>
 public class MsiInspectorService
 {
+    private readonly IDeserializer _yamlDeserializer;
+
+    public MsiInspectorService()
+    {
+        _yamlDeserializer = new DeserializerBuilder()
+            .WithNamingConvention(UnderscoredNamingConvention.Instance)
+            .IgnoreUnmatchedProperties()
+            .Build();
+    }
+
     /// <summary>
     /// Inspects an MSI file and extracts metadata, file list, and custom actions.
     /// </summary>
@@ -21,74 +33,127 @@ public class MsiInspectorService
         var packageData = new PackageData
         {
             FilePath = msiPath,
-            FileName = Path.GetFileName(msiPath)
+            FileName = Path.GetFileName(msiPath),
+            Format = PackageFormat.Msi,
         };
 
         using var db = new Database(msiPath, DatabaseOpenMode.ReadOnly);
 
-        // Extract metadata from Property table
-        LoadMsiMetadata(db, packageData);
-
-        // Extract file list from File table
+        var properties = ReadAllProperties(db);
+        LoadMsiMetadata(properties, packageData);
+        LoadArchitecture(db, packageData);
         LoadMsiFiles(db, packageData);
-
-        // Extract custom actions as "scripts"
         LoadMsiCustomActions(db, packageData);
-
-        // Build file tree from the file list
         BuildFileTree(packageData);
-
-        // Check Authenticode signature
         CheckSignature(msiPath, packageData);
 
         return Task.FromResult(packageData);
     }
 
-    private void LoadMsiMetadata(Database db, PackageData packageData)
+    private void LoadMsiMetadata(Dictionary<string, string> properties, PackageData packageData)
     {
-        var properties = ReadAllProperties(db);
+        // MSI identity — always populated regardless of whether this is a cimipkg MSI
+        packageData.ProductCode = properties.GetValueOrDefault("ProductCode") ?? string.Empty;
+        packageData.UpgradeCode = properties.GetValueOrDefault("UpgradeCode") ?? string.Empty;
+        packageData.Identifier = properties.GetValueOrDefault("CIMIAN_IDENTIFIER") ?? string.Empty;
+        packageData.FullVersion = properties.GetValueOrDefault("CIMIAN_FULL_VERSION") ?? string.Empty;
 
-        // Check for cimipkg-built MSI
         var buildInfoYaml = properties.GetValueOrDefault("CIMIAN_PKG_BUILD_INFO");
-        if (!string.IsNullOrEmpty(buildInfoYaml))
+        packageData.IsCimipkgMsi = !string.IsNullOrEmpty(buildInfoYaml);
+
+        if (packageData.IsCimipkgMsi)
         {
-            packageData.RawMetadata = buildInfoYaml;
-            packageData.Metadata = new BuildInfo
-            {
-                Name = properties.GetValueOrDefault("ProductName") ?? Path.GetFileNameWithoutExtension(packageData.FileName),
-                Version = properties.GetValueOrDefault("CIMIAN_FULL_VERSION") ?? properties.GetValueOrDefault("ProductVersion") ?? "Unknown",
-                Author = properties.GetValueOrDefault("Manufacturer") ?? "Unknown",
-                Description = properties.GetValueOrDefault("ARPCOMMENTS") ?? "Cimian MSI package",
-            };
+            packageData.RawMetadata = buildInfoYaml!;
+            packageData.Metadata = DeserializeBuildInfo(buildInfoYaml!, packageData);
+            return;
         }
-        else
+
+        // Third-party MSI: synthesise a YAML-ish dump of the Property table as the
+        // "raw metadata" view, and a BuildInfo from the ARP fields users expect.
+        packageData.RawMetadata = FormatPropertyDump(properties);
+        packageData.Metadata = new BuildInfo
         {
-            // Commercial MSI — build metadata from Property table
-            var rawLines = new List<string> { "# MSI Property Table" };
-            foreach (var (key, value) in properties.OrderBy(p => p.Key))
+            Name = properties.GetValueOrDefault("ProductName")
+                ?? Path.GetFileNameWithoutExtension(packageData.FileName),
+            Version = properties.GetValueOrDefault("ProductVersion") ?? "Unknown",
+            Author = properties.GetValueOrDefault("Manufacturer") ?? "Unknown",
+            Description = properties.GetValueOrDefault("ARPCOMMENTS") ?? string.Empty,
+            Homepage = properties.GetValueOrDefault("ARPURLINFOABOUT") ?? string.Empty,
+            InstallLocation = properties.GetValueOrDefault("INSTALLDIR")
+                ?? properties.GetValueOrDefault("APPLICATIONFOLDER") ?? string.Empty,
+        };
+    }
+
+    private BuildInfo DeserializeBuildInfo(string yaml, PackageData packageData)
+    {
+        try
+        {
+            var parsed = _yamlDeserializer.Deserialize<BuildInfo>(yaml) ?? new BuildInfo();
+
+            // Flatten the nested product: block into the top-level BuildInfo fields
+            // the UI currently binds against, but keep Product around so consumers
+            // (and the Metadata tab) still see the whole structure.
+            if (parsed.Product != null)
             {
-                if (value.Length < 200) // Skip very long values
-                    rawLines.Add($"{key}: {value}");
+                if (string.IsNullOrWhiteSpace(parsed.Name))
+                    parsed.Name = parsed.Product.Name;
+                if (string.IsNullOrWhiteSpace(parsed.Version))
+                    parsed.Version = parsed.Product.Version;
+                if (string.IsNullOrWhiteSpace(parsed.Author))
+                    parsed.Author = parsed.Product.Developer;
+                if (string.IsNullOrWhiteSpace(parsed.Description))
+                    parsed.Description = parsed.Product.Description;
+                if (string.IsNullOrWhiteSpace(parsed.License))
+                    parsed.License = parsed.Product.License ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(parsed.Homepage))
+                    parsed.Homepage = parsed.Product.Url ?? string.Empty;
+
+                if (string.IsNullOrWhiteSpace(packageData.Identifier))
+                    packageData.Identifier = parsed.Product.Identifier;
             }
-            packageData.RawMetadata = string.Join("\n", rawLines);
 
-            packageData.Metadata = new BuildInfo
+            return parsed;
+        }
+        catch
+        {
+            // Corrupted or unexpected YAML shape — fall back to a minimal BuildInfo
+            // from the raw properties so the UI still populates something useful.
+            return new BuildInfo
             {
-                Name = properties.GetValueOrDefault("ProductName") ?? Path.GetFileNameWithoutExtension(packageData.FileName),
-                Version = properties.GetValueOrDefault("ProductVersion") ?? "Unknown",
-                Author = properties.GetValueOrDefault("Manufacturer") ?? "Unknown",
-                Description = properties.GetValueOrDefault("ARPCOMMENTS") ?? "",
+                Name = Path.GetFileNameWithoutExtension(packageData.FileName),
+                Version = packageData.FullVersion,
+                Description = "build-info.yaml embedded in MSI could not be parsed",
             };
         }
+    }
 
-        // Store MSI-specific info in metadata
-        var identifier = properties.GetValueOrDefault("CIMIAN_IDENTIFIER");
-        if (!string.IsNullOrEmpty(identifier) && packageData.Metadata != null)
+    private static string FormatPropertyDump(IDictionary<string, string> properties)
+    {
+        var lines = new List<string> { "# MSI Property Table" };
+        foreach (var (key, value) in properties.OrderBy(p => p.Key))
         {
-            packageData.Metadata.Description +=
-                $"\n\nProductCode: {properties.GetValueOrDefault("ProductCode")}" +
-                $"\nUpgradeCode: {properties.GetValueOrDefault("UpgradeCode")}" +
-                $"\nIdentifier: {identifier}";
+            if (value.Length < 200) // Skip very long values (build-info YAML, CABs, etc.)
+                lines.Add($"{key}: {value}");
+        }
+        return string.Join("\n", lines);
+    }
+
+    private static void LoadArchitecture(Database db, PackageData packageData)
+    {
+        try
+        {
+            var template = db.SummaryInfo.Template;
+            if (string.IsNullOrEmpty(template)) return;
+
+            // Template format: "Platform;LanguageID" e.g. "x64;1033" or "Intel;1033"
+            packageData.Architecture = template.Contains("x64", StringComparison.OrdinalIgnoreCase) ? "x64"
+                : template.Contains("Arm64", StringComparison.OrdinalIgnoreCase) ? "arm64"
+                : template.Contains("Intel", StringComparison.OrdinalIgnoreCase) ? "x86"
+                : string.Empty;
+        }
+        catch
+        {
+            // SummaryInfo read failed — leave blank
         }
     }
 
@@ -141,20 +206,22 @@ public class MsiInspectorService
                 var actionType = record.GetInteger(2);
                 var target = record.GetString(3) ?? "";
 
-                // Type 6 or 38 = VBScript, Type 5 or 37 = JScript, Type 102 = VBS+sync+continue
-                var isScript = (actionType & 0x07) == 6 || (actionType & 0x07) == 5;
-                // Type 51 = set property
-                var isSetProp = (actionType & 0x3F) == 51;
+                // cimipkg emits Type 102 (inline VBS, sync, continue) for its
+                // chunked-base64 PowerShell wrappers. Decode those back to .ps1.
+                if (MsiScriptDecoder.LooksLikeCimipkgWrapper(target))
+                {
+                    scripts.AddRange(MsiScriptDecoder.DecodeToScripts(actionName, target));
+                    continue;
+                }
 
+                // Other script-type custom actions: VBS (6/38) or JScript (5/37).
+                var isScript = (actionType & 0x07) == 6 || (actionType & 0x07) == 5;
                 if (isScript && target.Length > 10)
                 {
                     scripts.Add(new ScriptInfo
                     {
                         Name = actionName,
-                        Type = actionName.Contains("Preinstall") ? "Pre-Install Action"
-                            : actionName.Contains("Postinstall") ? "Post-Install Action"
-                            : actionName.Contains("Uninstall") ? "Uninstall Action"
-                            : "Custom Action",
+                        Type = ClassifyActionName(actionName),
                         Content = target,
                         RelativePath = $"CustomAction/{actionName}"
                     });
@@ -163,6 +230,17 @@ public class MsiInspectorService
         }
 
         packageData.Scripts = scripts;
+    }
+
+    private static string ClassifyActionName(string actionName)
+    {
+        if (actionName.Contains("Preinstall", StringComparison.OrdinalIgnoreCase))
+            return "Pre-Install Action";
+        if (actionName.Contains("Postinstall", StringComparison.OrdinalIgnoreCase))
+            return "Post-Install Action";
+        if (actionName.Contains("Uninstall", StringComparison.OrdinalIgnoreCase))
+            return "Uninstall Action";
+        return "Custom Action";
     }
 
     private void BuildFileTree(PackageData packageData)
