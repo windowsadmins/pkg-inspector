@@ -128,7 +128,7 @@ public class MsiInspectorService
             packageData.Metadata = metadata ?? new BuildInfo
             {
                 Name = properties.GetValueOrDefault("ProductName") ?? Path.GetFileNameWithoutExtension(packageData.FileName),
-                Version = properties.GetValueOrDefault("CIMIAN_FULL_VERSION") ?? properties.GetValueOrDefault("ProductVersion") ?? "Unknown",
+                Version = properties.GetValueOrDefault("CIMIAN_PKG_FULL_VERSION") ?? properties.GetValueOrDefault("ProductVersion") ?? "Unknown",
                 Author = properties.GetValueOrDefault("Manufacturer") ?? "Unknown",
                 Description = properties.GetValueOrDefault("ARPCOMMENTS") ?? "Cimian MSI package",
             };
@@ -142,7 +142,7 @@ public class MsiInspectorService
             if (string.IsNullOrEmpty(packageData.Metadata.Name))
                 packageData.Metadata.Name = properties.GetValueOrDefault("ProductName") ?? Path.GetFileNameWithoutExtension(packageData.FileName);
             if (string.IsNullOrEmpty(packageData.Metadata.Version))
-                packageData.Metadata.Version = properties.GetValueOrDefault("CIMIAN_FULL_VERSION") ?? properties.GetValueOrDefault("ProductVersion") ?? "Unknown";
+                packageData.Metadata.Version = properties.GetValueOrDefault("CIMIAN_PKG_FULL_VERSION") ?? properties.GetValueOrDefault("ProductVersion") ?? "Unknown";
             if (string.IsNullOrEmpty(packageData.Metadata.Author))
                 packageData.Metadata.Author = properties.GetValueOrDefault("Manufacturer") ?? "Unknown";
             if (string.IsNullOrEmpty(packageData.Metadata.Description))
@@ -172,14 +172,14 @@ public class MsiInspectorService
         // than string-concatenating it into Description. The Package Info
         // tab has a dedicated "MSI Identity" panel that binds these and
         // hides rows whose values are empty (so third-party MSIs without a
-        // CIMIAN_IDENTIFIER still get ProductCode + UpgradeCode shown).
+        // CIMIAN_PKG_IDENTIFIER still get ProductCode + UpgradeCode shown).
         packageData.ProductCode = properties.GetValueOrDefault("ProductCode") ?? string.Empty;
         packageData.UpgradeCode = properties.GetValueOrDefault("UpgradeCode") ?? string.Empty;
-        packageData.Identifier = properties.GetValueOrDefault("CIMIAN_IDENTIFIER") ?? string.Empty;
-        packageData.FullVersion = properties.GetValueOrDefault("CIMIAN_FULL_VERSION") ?? string.Empty;
+        packageData.Identifier = properties.GetValueOrDefault("CIMIAN_PKG_IDENTIFIER") ?? string.Empty;
+        packageData.FullVersion = properties.GetValueOrDefault("CIMIAN_PKG_FULL_VERSION") ?? string.Empty;
         packageData.IsCimipkgMsi = !string.IsNullOrEmpty(properties.GetValueOrDefault("CIMIAN_PKG_BUILD_INFO"));
 
-        // If the cimipkg YAML had product.identifier set but CIMIAN_IDENTIFIER
+        // If the cimipkg YAML had product.identifier set but CIMIAN_PKG_IDENTIFIER
         // is missing from the Property table (older cimipkg builds), backfill
         // from the parsed metadata so the UI still has a value to show.
         if (string.IsNullOrEmpty(packageData.Identifier) && packageData.Metadata?.Product != null)
