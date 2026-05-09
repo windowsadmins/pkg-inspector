@@ -147,7 +147,7 @@ public partial class WelcomeControl : System.Windows.Controls.UserControl, INoti
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = "Package Files (*.pkg;*.nupkg)|*.pkg;*.nupkg|All Files (*.*)|*.*",
+            Filter = "Package Files (*.msi;*.nupkg)|*.msi;*.nupkg|All Files (*.*)|*.*",
             Title = "Select a Package to Inspect"
         };
 
@@ -207,8 +207,15 @@ public partial class WelcomeControl : System.Windows.Controls.UserControl, INoti
             if (files.Length > 0)
             {
                 var file = files[0];
-                if (file.EndsWith(".pkg", StringComparison.OrdinalIgnoreCase) ||
-                    file.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
+                // Accept .pkg silently for back-compat. The format is being
+                // retired and no longer advertised in the file dialog filter
+                // or welcome-screen text, but PackageInspectorService still
+                // handles it and other entry points (command-line args,
+                // Recent Packages) still route through LoadPackage, so
+                // rejecting drops here would be an isolated inconsistency.
+                if (file.EndsWith(".msi", StringComparison.OrdinalIgnoreCase) ||
+                    file.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase) ||
+                    file.EndsWith(".pkg", StringComparison.OrdinalIgnoreCase))
                 {
                     PackageSelected?.Invoke(this, file);
                 }

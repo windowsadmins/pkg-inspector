@@ -33,13 +33,19 @@ public class MsiInspectorService
         var packageData = new PackageData
         {
             FilePath = msiPath,
-            FileName = Path.GetFileName(msiPath)
+            FileName = Path.GetFileName(msiPath),
+            Format = PackageFormat.Msi,
         };
 
         using var db = new Database(msiPath, DatabaseOpenMode.ReadOnly);
 
         // Extract metadata from Property table
         LoadMsiMetadata(db, packageData);
+
+        // Derive architecture from the Summary Information stream ("Intel" / "x64"
+        // / "Arm64" in the Template field). Kept separate from LoadMsiMetadata so
+        // a SummaryInfo read failure can't disrupt the main metadata path.
+        LoadArchitecture(db, packageData);
 
         // Extract file list from File table
         LoadMsiFiles(db, packageData);
@@ -54,6 +60,25 @@ public class MsiInspectorService
         CheckSignature(msiPath, packageData);
 
         return Task.FromResult(packageData);
+    }
+
+    private static void LoadArchitecture(Database db, PackageData packageData)
+    {
+        try
+        {
+            var template = db.SummaryInfo.Template;
+            if (string.IsNullOrEmpty(template)) return;
+
+            // Template format: "Platform;LanguageID" e.g. "x64;1033" or "Intel;1033".
+            packageData.Architecture = template.Contains("x64", StringComparison.OrdinalIgnoreCase) ? "x64"
+                : template.Contains("Arm64", StringComparison.OrdinalIgnoreCase) ? "arm64"
+                : template.Contains("Intel", StringComparison.OrdinalIgnoreCase) ? "x86"
+                : string.Empty;
+        }
+        catch
+        {
+            // SummaryInfo read failed — leave Architecture blank. UI hides the row.
+        }
     }
 
     private void LoadMsiMetadata(Database db, PackageData packageData)
@@ -103,7 +128,7 @@ public class MsiInspectorService
             packageData.Metadata = metadata ?? new BuildInfo
             {
                 Name = properties.GetValueOrDefault("ProductName") ?? Path.GetFileNameWithoutExtension(packageData.FileName),
-                Version = properties.GetValueOrDefault("CIMIAN_FULL_VERSION") ?? properties.GetValueOrDefault("ProductVersion") ?? "Unknown",
+                Version = properties.GetValueOrDefault("CIMIAN_PKG_FULL_VERSION") ?? properties.GetValueOrDefault("ProductVersion") ?? "Unknown",
                 Author = properties.GetValueOrDefault("Manufacturer") ?? "Unknown",
                 Description = properties.GetValueOrDefault("ARPCOMMENTS") ?? "Cimian MSI package",
             };
@@ -117,7 +142,7 @@ public class MsiInspectorService
             if (string.IsNullOrEmpty(packageData.Metadata.Name))
                 packageData.Metadata.Name = properties.GetValueOrDefault("ProductName") ?? Path.GetFileNameWithoutExtension(packageData.FileName);
             if (string.IsNullOrEmpty(packageData.Metadata.Version))
-                packageData.Metadata.Version = properties.GetValueOrDefault("CIMIAN_FULL_VERSION") ?? properties.GetValueOrDefault("ProductVersion") ?? "Unknown";
+                packageData.Metadata.Version = properties.GetValueOrDefault("CIMIAN_PKG_FULL_VERSION") ?? properties.GetValueOrDefault("ProductVersion") ?? "Unknown";
             if (string.IsNullOrEmpty(packageData.Metadata.Author))
                 packageData.Metadata.Author = properties.GetValueOrDefault("Manufacturer") ?? "Unknown";
             if (string.IsNullOrEmpty(packageData.Metadata.Description))
@@ -143,14 +168,23 @@ public class MsiInspectorService
             };
         }
 
-        // Store MSI-specific info in metadata
-        var identifier = properties.GetValueOrDefault("CIMIAN_IDENTIFIER");
-        if (!string.IsNullOrEmpty(identifier) && packageData.Metadata != null)
+        // Surface MSI identity as first-class fields on PackageData rather
+        // than string-concatenating it into Description. The Package Info
+        // tab has a dedicated "MSI Identity" panel that binds these and
+        // hides rows whose values are empty (so third-party MSIs without a
+        // CIMIAN_PKG_IDENTIFIER still get ProductCode + UpgradeCode shown).
+        packageData.ProductCode = properties.GetValueOrDefault("ProductCode") ?? string.Empty;
+        packageData.UpgradeCode = properties.GetValueOrDefault("UpgradeCode") ?? string.Empty;
+        packageData.Identifier = properties.GetValueOrDefault("CIMIAN_PKG_IDENTIFIER") ?? string.Empty;
+        packageData.FullVersion = properties.GetValueOrDefault("CIMIAN_PKG_FULL_VERSION") ?? string.Empty;
+        packageData.IsCimipkgMsi = !string.IsNullOrEmpty(properties.GetValueOrDefault("CIMIAN_PKG_BUILD_INFO"));
+
+        // If the cimipkg YAML had product.identifier set but CIMIAN_PKG_IDENTIFIER
+        // is missing from the Property table (older cimipkg builds), backfill
+        // from the parsed metadata so the UI still has a value to show.
+        if (string.IsNullOrEmpty(packageData.Identifier) && packageData.Metadata?.Product != null)
         {
-            packageData.Metadata.Description +=
-                $"\n\nProductCode: {properties.GetValueOrDefault("ProductCode")}" +
-                $"\nUpgradeCode: {properties.GetValueOrDefault("UpgradeCode")}" +
-                $"\nIdentifier: {identifier}";
+            packageData.Identifier = packageData.Metadata.Product.Identifier;
         }
     }
 
@@ -215,6 +249,14 @@ public class MsiInspectorService
                 var decodedPs1 = CimipkgVbsDecoder.TryDecode(target);
                 var isCimipkgScript = decodedPs1 != null;
 
+                // cimipkg emits a "# No preinstall scripts" / "# No postinstall
+                // scripts" / "# No uninstall scripts" placeholder when a phase
+                // has no user-authored script. The custom action still exists
+                // in the sequence (sequencing tables want it), but there's
+                // nothing worth showing — skip the entry so the Scripts tab
+                // only lists real scripts.
+                if (isCimipkgScript && IsCimipkgPlaceholder(decodedPs1!)) continue;
+
                 string scriptName;
                 string scriptType;
                 string relativePath;
@@ -260,6 +302,18 @@ public class MsiInspectorService
         }
 
         packageData.Scripts = scripts;
+    }
+
+    private static bool IsCimipkgPlaceholder(string content)
+    {
+        // cimipkg stubs are a single short comment line: "# No preinstall
+        // scripts", "# No postinstall scripts", "# No uninstall scripts".
+        // Match the shape rather than hard-coding phase names so any future
+        // cimipkg stub in the same family also collapses.
+        var trimmed = content.Trim();
+        return trimmed.StartsWith("# No ", StringComparison.Ordinal) &&
+               trimmed.EndsWith(" scripts", StringComparison.Ordinal) &&
+               !trimmed.Contains('\n');
     }
 
     private void BuildFileTree(PackageData packageData)
