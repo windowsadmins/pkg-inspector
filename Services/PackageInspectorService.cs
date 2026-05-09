@@ -34,7 +34,8 @@ public class PackageInspectorService
         var packageData = new PackageData
         {
             FilePath = packagePath,
-            FileName = Path.GetFileName(packagePath)
+            FileName = Path.GetFileName(packagePath),
+            Format = PackageFormat.Nupkg,
         };
 
         string tempDir = Path.Combine(Path.GetTempPath(), $"pkginspector_{Guid.NewGuid()}");

@@ -124,7 +124,7 @@
                                        FontWeight="SemiBold"
                                        Foreground="{DynamicResource PrimaryBrush}"
                                        Margin="0,0,0,4"/>
-                            <TextBlock Text="You can drag .pkg or .nupkg files from anywhere and drop them into this window." 
+                            <TextBlock Text="You can drag .msi or .nupkg files from anywhere and drop them into this window."
                                        FontSize="12"
                                        Foreground="{DynamicResource TextPrimaryBrush}"
                                        TextWrapping="Wrap"/>
@@ -142,7 +142,7 @@
                                Foreground="{DynamicResource TextSecondaryBrush}"
                                HorizontalAlignment="Center"
                                Margin="0,4,0,0">
-                        <Run Text="Compatible with .pkg and .nupkg files"/>
+                        <Run Text="Compatible with .msi and .nupkg files"/>
                     </TextBlock>
                 </StackPanel>
             </Grid>
