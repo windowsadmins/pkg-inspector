@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~\.nuget\packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Build.props', '**/Directory.Packages.props') }}
+
+      - name: Derive version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v',''
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Build binaries
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+
+          foreach ($rid in @("win-x64", "win-arm64")) {
+            dotnet publish pkginspector.csproj `
+              -c Release -r $rid --self-contained true `
+              -o "publish/$rid" `
+              -p:PublishSingleFile=true `
+              -p:IncludeNativeLibrariesForSelfExtract=true `
+              -p:IncludeAllContentForSelfExtract=true `
+              -p:EnableCompressionInSingleFile=true `
+              -p:Version=$version `
+              -p:AssemblyVersion=$version `
+              -p:FileVersion=$version `
+              -p:InformationalVersion=$version
+
+            $arch = if ($rid -eq "win-x64") { "x64" } else { "arm64" }
+            Compress-Archive -Path "publish/$rid/pkginspector.exe" -DestinationPath "release/pkginspector-$arch.zip" -Force
+          }
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = "${{ steps.version.outputs.version }}"
+          $dotnet = (dotnet --version).Trim()
+          $os = (Get-CimInstance Win32_OperatingSystem).Caption.Trim()
+          $runUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          $title = "pkg-inspector $version"
+
+          $buildInfo = @"
+          ## Build info
+
+          Built with .NET SDK $dotnet on $os, via GitHub Actions: $runUrl. Provided **unsigned**.
+          "@
+
+          $signing = @"
+          ## Signing for enterprise deployment
+
+          ``````powershell
+          Expand-Archive -Path pkginspector-x64.zip -DestinationPath .
+          signtool sign /fd SHA256 /tr https://timestamp.digicert.com /td SHA256 /n "Your Certificate Name" pkginspector.exe
+          ``````
+
+          Built from commit ``$env:GITHUB_SHA``.
+          "@
+
+          $autoNotes = gh api -X POST "repos/$env:GITHUB_REPOSITORY/releases/generate-notes" -f tag_name=$tag --jq .body
+          $notes = "$buildInfo`n`n$autoNotes`n`n$signing"
+
+          $artifacts = Get-ChildItem -Path release -File | ForEach-Object { $_.FullName }
+          if ($artifacts.Count -eq 0) { throw 'No artifacts to upload' }
+          gh release create $tag @artifacts --title $title --notes $notes
