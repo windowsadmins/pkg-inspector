@@ -10,6 +10,7 @@ permissions:
 env:
   DOTNET_VERSION: '10.0.x'
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  TZ: 'America/Vancouver'
 
 jobs:
   release:
@@ -66,31 +67,37 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = "${{ github.ref_name }}"
-          $version = "${{ steps.version.outputs.version }}"
+          $tag = '${{ github.ref_name }}'
+          $title = "pkg-inspector $tag"
           $dotnet = (dotnet --version).Trim()
           $os = (Get-CimInstance Win32_OperatingSystem).Caption.Trim()
           $runUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
-          $title = "pkg-inspector $version"
 
           $buildInfo = @"
           ## Build info
 
-          Built with .NET SDK $dotnet on $os, via GitHub Actions: $runUrl. Provided **unsigned**.
+          This release was built with .NET SDK $dotnet on $os, via a GitHub Actions workflow here: $runUrl. It is provided **unsigned** — see signing instructions at the bottom.
           "@
 
           $signing = @"
           ## Signing for enterprise deployment
 
+          Sign the binaries with your organization's code signing certificate before distribution:
+
           ``````powershell
+          `$cert = "Your Certificate Name"
+          `$timestampUrl = "http://timestamp.digicert.com"
+
           Expand-Archive -Path pkginspector-x64.zip -DestinationPath .
-          signtool sign /fd SHA256 /tr https://timestamp.digicert.com /td SHA256 /n "Your Certificate Name" pkginspector.exe
+          Get-ChildItem -Recurse -Include *.exe,*.dll | ForEach-Object {
+              signtool sign /fd SHA256 /tr `$timestampUrl /td SHA256 /n `$cert `$_.FullName
+          }
           ``````
 
           Built from commit ``$env:GITHUB_SHA``.
           "@
 
-          $autoNotes = gh api -X POST "repos/$env:GITHUB_REPOSITORY/releases/generate-notes" -f tag_name=$tag --jq .body
+          $autoNotes = (gh api -X POST "repos/$env:GITHUB_REPOSITORY/releases/generate-notes" -f tag_name=$tag --jq .body) -join "`n"
           $notes = "$buildInfo`n`n$autoNotes`n`n$signing"
 
           $artifacts = Get-ChildItem -Path release -File | ForEach-Object { $_.FullName }
