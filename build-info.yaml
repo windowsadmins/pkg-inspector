@@ -1,0 +1,9 @@
+product:
+  name: PkgInspector
+  version: ${TIMESTAMP}
+  developer: Windows Admins Open Source
+  identifier: ca.emilycarru.winadmins.${ARCH}.PkgInspector
+  description: A package inspector for Windows compatible with .pkg and .nupkg files.
+signing_certificate: EmilyCarrU Intune Windows Enterprise Certificate
+postinstall_action: none
+install_location: 'C:\Program Files\PkgInspector'
