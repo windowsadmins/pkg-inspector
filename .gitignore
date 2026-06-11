@@ -36,6 +36,7 @@ TestResults/
 
 # Build info
 build-info.yaml
+!/build-info.yaml
 
 # Windows
 Thumbs.db
