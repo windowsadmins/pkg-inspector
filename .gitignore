@@ -56,3 +56,6 @@ tmp/
 temp/
 test-*/
 *-staging-*
+
+# Git worktrees
+/.worktrees/
