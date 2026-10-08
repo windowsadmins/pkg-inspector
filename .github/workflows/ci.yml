@@ -43,3 +43,6 @@ jobs:
 
       - name: Build
         run: dotnet build pkginspector.csproj --configuration Release --no-restore --verbosity minimal
+
+      - name: Test
+        run: dotnet test tests/PkgInspector.Tests/PkgInspector.Tests.csproj --configuration Release --verbosity minimal

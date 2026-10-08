@@ -42,6 +42,15 @@
     <Compile Remove="cli\**" />
     <EmbeddedResource Remove="cli\**" />
     <None Remove="cli\**" />
+    <!-- The test project and git worktrees build on their own -->
+    <Compile Remove="tests\**;.worktrees\**" />
+    <EmbeddedResource Remove="tests\**;.worktrees\**" />
+    <None Remove="tests\**;.worktrees\**" />
+    <Page Remove="tests\**;.worktrees\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PkgInspector.Tests" />
   </ItemGroup>
 
   <PropertyGroup>

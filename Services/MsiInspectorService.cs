@@ -81,12 +81,34 @@ public class MsiInspectorService
         }
     }
 
+    /// <summary>
+    /// cimipkg stores CIMIAN_PKG_BUILD_INFO as base64 of the YAML so the property
+    /// stays on one line; builds before that stored the YAML itself. Decode when
+    /// the value is base64, otherwise return it unchanged.
+    /// </summary>
+    internal static string? DecodeBuildInfoYaml(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return value;
+
+        // YAML has ':' on every key line and usually newlines; base64 has neither.
+        if (value.Contains('\n') || value.Contains(':')) return value;
+
+        try
+        {
+            return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(value));
+        }
+        catch (FormatException)
+        {
+            return value;
+        }
+    }
+
     private void LoadMsiMetadata(MsiDatabase db, PackageData packageData)
     {
         var properties = ReadAllProperties(db);
 
         // Check for cimipkg-built MSI
-        var buildInfoYaml = properties.GetValueOrDefault("CIMIAN_PKG_BUILD_INFO");
+        var buildInfoYaml = DecodeBuildInfoYaml(properties.GetValueOrDefault("CIMIAN_PKG_BUILD_INFO"));
         if (!string.IsNullOrEmpty(buildInfoYaml))
         {
             packageData.RawMetadata = buildInfoYaml;
@@ -224,7 +246,7 @@ public class MsiInspectorService
 
         var scripts = new List<ScriptInfo>();
 
-        using var view = db.OpenView("SELECT `Action`, `Type`, `Target` FROM `CustomAction`");
+        using var view = db.OpenView("SELECT `Action`, `Type`, `Target`, `Source` FROM `CustomAction`");
         for (var record = view.Fetch(); record != null; record = view.Fetch())
         {
             using (record)
@@ -232,17 +254,29 @@ public class MsiInspectorService
                 var actionName = record.GetString(1) ?? "";
                 var actionType = record.GetInteger(2);
                 var target = record.GetString(3) ?? "";
+                var source = record.GetString(4) ?? "";
 
-                // Type 6 or 38 = VBScript, Type 5 or 37 = JScript, Type 102 = VBS+sync+continue
-                var isScript = (actionType & 0x07) == 6 || (actionType & 0x07) == 5;
+                string? decodedPs1;
+                if (IsCimipkgExeScriptAction(actionType, source))
+                {
+                    // Script format 2: the script is in the Binary table under the
+                    // action's name and runs through an exe custom action, no VBScript.
+                    decodedPs1 = ReadBinaryScript(db, actionName);
+                    if (decodedPs1 == null) continue;
+                }
+                else
+                {
+                    // Type 6 or 38 = VBScript, Type 5 or 37 = JScript, Type 102 = VBS+sync+continue
+                    var isScript = (actionType & 0x07) == 6 || (actionType & 0x07) == 5;
 
-                if (!isScript || target.Length <= 10) continue;
+                    if (!isScript || target.Length <= 10) continue;
 
-                // cimipkg-built MSIs embed the real PowerShell source as a
-                // chunked base64 blob inside the VBS. Decode it so the
-                // Scripts tab shows the preinstall/postinstall.ps1 content
-                // users actually wrote, not 40 KB of unreadable VBS.
-                var decodedPs1 = CimipkgVbsDecoder.TryDecode(target);
+                    // Script format 1: cimipkg-built MSIs embed the real PowerShell
+                    // source as a chunked base64 blob inside the VBS. Decode it so the
+                    // Scripts tab shows the preinstall/postinstall.ps1 content
+                    // users actually wrote, not 40 KB of unreadable VBS.
+                    decodedPs1 = CimipkgVbsDecoder.TryDecode(target);
+                }
                 var isCimipkgScript = decodedPs1 != null;
 
                 // cimipkg emits a "# No preinstall scripts" / "# No postinstall
@@ -300,6 +334,41 @@ public class MsiInspectorService
         packageData.Scripts = scripts;
     }
 
+    /// <summary>
+    /// cimipkg's script format 2: a Type 50 exe custom action (low six bits of the
+    /// type; the deferred, no-impersonate and continue flags sit above them) whose
+    /// exe path comes from the CIMIAN_PSEXE property.
+    /// </summary>
+    internal static bool IsCimipkgExeScriptAction(int actionType, string source) =>
+        (actionType & 0x3F) == 50 && string.Equals(source, "CIMIAN_PSEXE", StringComparison.Ordinal);
+
+    /// <summary>
+    /// The script cimipkg stored in the Binary table under <paramref name="name"/>:
+    /// base64 text of UTF-8 bytes with a BOM. Null when the row is missing or
+    /// does not decode.
+    /// </summary>
+    internal static string? ReadBinaryScript(MsiDatabase db, string name)
+    {
+        if (!db.TableExists("Binary")) return null;
+
+        try
+        {
+            using var view = db.OpenView("SELECT `Data` FROM `Binary` WHERE `Name` = ?", name);
+            using var record = view.Fetch();
+            if (record == null) return null;
+
+            var base64 = System.Text.Encoding.ASCII.GetString(record.GetStream(1));
+            var bytes = Convert.FromBase64String(base64);
+            var bom = System.Text.Encoding.UTF8.GetPreamble();
+            var offset = bytes.AsSpan().StartsWith(bom) ? bom.Length : 0;
+            return System.Text.Encoding.UTF8.GetString(bytes, offset, bytes.Length - offset);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static bool IsCimipkgPlaceholder(string content)
     {
         // cimipkg stubs are a single short comment line: "# No preinstall
@@ -337,19 +406,13 @@ public class MsiInspectorService
 
     private void CheckSignature(string msiPath, PackageData packageData)
     {
-        try
-        {
-#pragma warning disable SYSLIB0057
-            var cert = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromSignedFile(msiPath);
-#pragma warning restore SYSLIB0057
-            packageData.IsSigned = true;
-            packageData.SignedBy = cert.Subject;
-        }
-        catch
-        {
-            packageData.IsSigned = false;
-            packageData.SignedBy = string.Empty;
-        }
+        // WinVerifyTrust, not just reading the certificate out of the file: a
+        // tampered or untrusted signature must not show as "Signed".
+        var result = AuthenticodeVerifier.Verify(msiPath);
+        packageData.IsSigned = result.IsTrusted;
+        packageData.SignedBy = result.IsTrusted || !result.HasSignature
+            ? result.Subject
+            : $"{result.Subject} (signature not trusted: 0x{result.Status:X8})";
     }
 
     private static Dictionary<string, string> ReadAllProperties(MsiDatabase db)
