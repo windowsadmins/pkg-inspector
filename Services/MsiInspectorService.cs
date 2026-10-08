@@ -1,13 +1,13 @@
 using System.IO;
 using PkgInspector.Models;
-using WixToolset.Dtf.WindowsInstaller;
+using PkgInspector.Services.Msi;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
 namespace PkgInspector.Services;
 
 /// <summary>
-/// Service for inspecting .msi package files using DTF (direct msi.dll interop).
+/// Service for inspecting .msi package files through msi.dll.
 /// Handles both cimipkg-built MSI (with CIMIAN_PKG_BUILD_INFO) and commercial MSI.
 /// </summary>
 public class MsiInspectorService
@@ -37,7 +37,7 @@ public class MsiInspectorService
             Format = PackageFormat.Msi,
         };
 
-        using var db = new Database(msiPath, DatabaseOpenMode.ReadOnly);
+        using var db = MsiDatabase.OpenReadOnly(msiPath);
 
         // Extract metadata from Property table
         LoadMsiMetadata(db, packageData);
@@ -62,11 +62,11 @@ public class MsiInspectorService
         return Task.FromResult(packageData);
     }
 
-    private static void LoadArchitecture(Database db, PackageData packageData)
+    private static void LoadArchitecture(MsiDatabase db, PackageData packageData)
     {
         try
         {
-            var template = db.SummaryInfo.Template;
+            var template = db.GetSummaryTemplate();
             if (string.IsNullOrEmpty(template)) return;
 
             // Template format: "Platform;LanguageID" e.g. "x64;1033" or "Intel;1033".
@@ -81,7 +81,7 @@ public class MsiInspectorService
         }
     }
 
-    private void LoadMsiMetadata(Database db, PackageData packageData)
+    private void LoadMsiMetadata(MsiDatabase db, PackageData packageData)
     {
         var properties = ReadAllProperties(db);
 
@@ -188,17 +188,15 @@ public class MsiInspectorService
         }
     }
 
-    private void LoadMsiFiles(Database db, PackageData packageData)
+    private void LoadMsiFiles(MsiDatabase db, PackageData packageData)
     {
-        if (!db.Tables.Contains("File"))
+        if (!db.TableExists("File"))
             return;
 
         var files = new List<Models.FileInfo>();
 
         using var view = db.OpenView("SELECT `File`, `FileName`, `FileSize`, `Component_` FROM `File`");
-        view.Execute();
-
-        foreach (var record in view)
+        for (var record = view.Fetch(); record != null; record = view.Fetch())
         {
             using (record)
             {
@@ -219,17 +217,15 @@ public class MsiInspectorService
         packageData.Files = files;
     }
 
-    private void LoadMsiCustomActions(Database db, PackageData packageData)
+    private void LoadMsiCustomActions(MsiDatabase db, PackageData packageData)
     {
-        if (!db.Tables.Contains("CustomAction"))
+        if (!db.TableExists("CustomAction"))
             return;
 
         var scripts = new List<ScriptInfo>();
 
         using var view = db.OpenView("SELECT `Action`, `Type`, `Target` FROM `CustomAction`");
-        view.Execute();
-
-        foreach (var record in view)
+        for (var record = view.Fetch(); record != null; record = view.Fetch())
         {
             using (record)
             {
@@ -356,17 +352,15 @@ public class MsiInspectorService
         }
     }
 
-    private static Dictionary<string, string> ReadAllProperties(Database db)
+    private static Dictionary<string, string> ReadAllProperties(MsiDatabase db)
     {
         var properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        if (!db.Tables.Contains("Property"))
+        if (!db.TableExists("Property"))
             return properties;
 
         using var view = db.OpenView("SELECT `Property`, `Value` FROM `Property`");
-        view.Execute();
-
-        foreach (var record in view)
+        for (var record = view.Fetch(); record != null; record = view.Fetch())
         {
             using (record)
             {

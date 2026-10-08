@@ -21,7 +21,7 @@ Originally part of the [sbin-installer](https://github.com/windowsadmins/sbin-in
 - **Modern WPF Interface** - Clean, intuitive design inspired by macOS Suspicious Package
 - **Automatic Theme Detection** - Adapts to Windows light/dark mode preferences
 - **Drag & Drop Support** - Simply drag package files into the window
-- **Direct MSI Inspection** - Opens `.msi` files via `msi.dll` through the WiX DTF managed wrapper — no extraction, no WiX toolchain, no shelling out to `msiexec`
+- **Direct MSI Inspection** - Opens `.msi` files directly through `msi.dll` — no extraction, no WiX, no shelling out to `msiexec`
 - **cimipkg MSI Decoder** - Automatically decodes PowerShell scripts embedded in cimipkg-built MSI custom actions and re-hydrates the original `build-info.yaml` metadata
 - **NuGet Package Support** - Inspect `.nupkg` payloads and `.nuspec` metadata
 - **Legacy `.pkg` Support** - Still reads the original cimipkg `.pkg` ZIP format for existing archives (kept for back-compatibility; new packages should be MSIs)
@@ -156,9 +156,9 @@ The application automatically detects which mode to use:
 
 ### `.msi` (Windows Installer) — primary format
 
-Package Inspector reads `.msi` files directly via `msi.dll` through the
-[WiX DTF](https://wixtoolset.org/docs/dtf/) managed wrapper, so no
-extraction, no WiX toolchain, and no `msiexec` shell-out is required.
+Package Inspector reads `.msi` files read-only through `msi.dll` with a
+small built-in interop class (`Services/Msi/MsiDatabase.cs`), so no
+extraction, no WiX, and no `msiexec` shell-out is required.
 Both commercial MSIs and cimipkg-built MSIs are supported.
 
 For MSIs built by cimipkg, the inspector automatically:
@@ -337,7 +337,8 @@ pkg-inspector/
 │   ├── PackageData.cs               # Package + file/script/tree-node data models
 │   └── BuildInfo.cs                 # build-info.yaml + nested ProductInfo models
 ├── Services/
-│   ├── MsiInspectorService.cs       # .msi inspection via WiX DTF / msi.dll (primary)
+│   ├── MsiInspectorService.cs       # .msi inspection via msi.dll (primary)
+│   ├── Msi/MsiDatabase.cs           # Read-only msi.dll interop (database, views, records)
 │   ├── CimipkgVbsDecoder.cs         # Decode PS embedded in cimipkg MSI custom actions
 │   └── PackageInspectorService.cs   # .nupkg and legacy .pkg inspection (ZIP + YAML)
 ├── Converters/
@@ -372,7 +373,6 @@ dotnet build --configuration Release
 
 - **YamlDotNet** 13.7.1 — YAML parsing for `build-info.yaml`
 - **AvalonEdit** 6.3.0.90 — Syntax-highlighted text editor for scripts
-- **WixToolset.Dtf.WindowsInstaller** 5.0.0 — Managed wrapper over `msi.dll` for direct MSI inspection
 - **Microsoft.Extensions.Logging** 10.0.0 — Logging framework
 - **Microsoft.Extensions.Logging.Console** 10.0.0 — Console sink for CLI-mode diagnostics
 
