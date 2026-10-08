@@ -165,6 +165,27 @@ public sealed class MsiRecord : IDisposable
         return buffer.ToString();
     }
 
+    /// <summary>The bytes of a stream (binary) field.</summary>
+    public byte[] GetStream(int field)
+    {
+        var size = MsiNative.MsiRecordDataSize(_handle, (uint)field);
+        var data = new byte[size];
+        var read = 0;
+        while (read < data.Length)
+        {
+            var chunk = new byte[Math.Min(data.Length - read, 1 << 20)];
+            var length = (uint)chunk.Length;
+            MsiNative.Check(MsiNative.MsiRecordReadStream(_handle, (uint)field, chunk, ref length));
+            if (length == 0)
+            {
+                break;
+            }
+            Buffer.BlockCopy(chunk, 0, data, read, (int)length);
+            read += (int)length;
+        }
+        return read == data.Length ? data : data[..read];
+    }
+
     /// <summary>The field as an integer; a null field reads as 0.</summary>
     public int GetInteger(int field)
     {
@@ -233,6 +254,12 @@ internal static class MsiNative
 
     [DllImport("msi.dll", ExactSpelling = true)]
     public static extern int MsiRecordGetInteger(MsiHandle record, uint field);
+
+    [DllImport("msi.dll", ExactSpelling = true)]
+    public static extern uint MsiRecordDataSize(MsiHandle record, uint field);
+
+    [DllImport("msi.dll", ExactSpelling = true)]
+    public static extern uint MsiRecordReadStream(MsiHandle record, uint field, byte[] buffer, ref uint length);
 
     [DllImport("msi.dll", ExactSpelling = true)]
     public static extern uint MsiCloseHandle(IntPtr handle);

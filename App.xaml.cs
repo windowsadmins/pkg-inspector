@@ -182,6 +182,12 @@ public partial class App : System.Windows.Application
 
     private int ShowSignatureInfo(string packagePath, bool quiet)
     {
+        // An .msi is not a ZIP; its signature is Authenticode, checked with WinVerifyTrust.
+        if (string.Equals(System.IO.Path.GetExtension(packagePath), ".msi", StringComparison.OrdinalIgnoreCase))
+        {
+            return ShowAuthenticodeInfo(packagePath, quiet);
+        }
+
         try
         {
             using var zip = System.IO.Compression.ZipFile.OpenRead(packagePath);
@@ -248,6 +254,29 @@ public partial class App : System.Windows.Application
             Console.Error.WriteLine($"Error reading package: {ex.Message}");
             return 1;
         }
+    }
+
+    private static int ShowAuthenticodeInfo(string packagePath, bool quiet)
+    {
+        var result = PkgInspector.Services.AuthenticodeVerifier.Verify(packagePath);
+        var name = System.IO.Path.GetFileName(packagePath);
+        var trust = result.IsTrusted ? "trusted" : $"not trusted (0x{result.Status:X8})";
+
+        if (quiet)
+        {
+            Console.WriteLine(result.HasSignature ? $"Signed|{result.Subject}|{trust}" : "Unsigned");
+        }
+        else if (result.HasSignature)
+        {
+            Console.WriteLine($"Signature information for \"{name}\"");
+            Console.WriteLine($"   summary                 : Signed by \"{result.Subject}\"");
+            Console.WriteLine($"   trust                   : {trust}");
+        }
+        else
+        {
+            Console.WriteLine($"Package \"{name}\" is not signed");
+        }
+        return 0;
     }
 
     private int ShowComponentPackages(string packagePath, bool quiet)

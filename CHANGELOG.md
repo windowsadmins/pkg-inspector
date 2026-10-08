@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `CIMIAN_PKG_BUILD_INFO`, which cimipkg stores as base64, is decoded before parsing, so the Metadata tab shows the build-info YAML instead of a base64 blob. MSIs from before the base64 change still read as before.
+- `-g` on an `.msi` reports its Authenticode signature instead of failing with "End of Central Directory record could not be found".
+- Signatures are checked with `WinVerifyTrust`. A tampered or untrusted signature no longer shows as "Signed".
+
+### Added
+- Scripts in cimipkg's VBScript-free format (format 2) are read from the Binary table, alongside the existing VBScript format (format 1).
+- A test project (`tests/PkgInspector.Tests`), run in CI.
+
 ### Changed
 - MSIs are read through a small read-only `msi.dll` interop class (`Services/Msi/MsiDatabase.cs`) instead of the WiX DTF wrapper. `WixToolset.Dtf.WindowsInstaller` is no longer a dependency.
 
